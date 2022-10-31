@@ -470,10 +470,10 @@ function newID() {
 
 // swig 필터
 swig.setFilter('encode_userdoc', function encodeUserdocURL(input) {
-	return encodeURIComponent('사용자:' + input);
+	return '사용자:' + input;
 });
 swig.setFilter('encode_doc', function encodeDocURL(input) {
-	return encodeURIComponent(input);
+	return input;
 });
 swig.setFilter('avatar_url', function(input) {
 	return 'https://www.gravatar.com/avatar/' + md5(getUserSetting(input.username, 'email', '')) + '?d=retro';
@@ -1526,6 +1526,16 @@ async function markdown(req, content, discussion = 0, title = '', flags = '', ro
 				</div>
 			` + data;
 		}
+const kickdata = await userkicked(doc.title);
+		if(kickdata) {
+			data = `
+				<div style="border-width: 5px 1px 1px; border-style: solid; border-color: red gray gray; padding: 10px; margin-bottom: 10px;" onmouseover="this.style.borderTopColor=\'blue\';" onmouseout="this.style.borderTopColor=\'red\';">
+					<span style="font-size: 14pt;">이 사용자는 추방된 사용자입니다.${ver('4.18.0') ? ` (#${blockdata.id})` : ''}</span><br /><br />
+				이 사용자는 ${generateTime(toDate(blockdata.date), timeFormat)}에 이 위키에서 추방되었습니다.<br />
+					차단 사유: ${html.escape(blockdata.note)}
+				</div>
+			` + data;
+		}
 		if(doc.namespace == '사용자') {
 			if(!ver('4.0.20')) {
 				if(getperm('tribune', doc.title)) {
@@ -1957,7 +1967,7 @@ function alertBalloon(content, type = 'danger', dismissible = true, classes = ''
 
 // 이름공간 목록
 function fetchNamespaces() {
-	return ['문서', '틀', '분류', '파일', '사용자', '특수기능', config.getString('wiki.site_name', '더 시드'), '토론', '휴지통', '투표'].concat(hostconfig.custom_namespaces || []);
+	return ['문서', '틀', '분류', '파일', '사용자', config.getString('wiki.site_name', '더 시드'), '휴지통'].concat(hostconfig.custom_namespaces || []);
 }
 
 function err(type, obj) {
@@ -2052,7 +2062,19 @@ async function userblocked(username) {
 		} else return false;
 	}
 }
-
+async function userkicked(username){
+		await curs.execute("delete from aclgroup where not expiration = '0' and ? > cast(expiration as integer)", [Number(getTime())]);
+		var data = await curs.execute("select id, type, username, note, expiration, date from aclgroup where aclgroup = ? and username = ?", ['추방된 사용자', username]);
+		if(data.length) {
+			return {
+				username,
+				expiration: data[0].expiration,
+				note: data[0].note,
+				date: data[0].date,
+				id: data[0].id,
+			};
+		}
+}
 // ACL 검사
 async function getacl(req, title, namespace, type, getmsg) {
 	var ns  = await curs.execute("select id, action, expiration, condition, conditiontype from acl where namespace = ? and type = ? and ns = '1' order by cast(id as integer) asc", [namespace, type]);
